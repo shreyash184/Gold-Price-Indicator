@@ -1,0 +1,61 @@
+//@version=5
+indicator("Adaptive Hammer Reversal Signal", overlay=true)
+
+// Lookback range to learn from historical hammer-like candles
+lookback = 500
+
+var float bodyPercentSum = 0
+var float lowerWickPercentSum = 0
+var int hammerCount = 0
+
+// Loop through history and collect candle structure
+for i = 1 to lookback
+    high_ = high[i]
+    low_ = low[i]
+    open_ = open[i]
+    close_ = close[i]
+    candleRange = high_ - low_
+    if candleRange > 0
+        body = math.abs(close_ - open_)
+        lowerWick = math.min(close_, open_) - low_
+        bodyPct = (body / candleRange) * 100
+        lowerWickPct = (lowerWick / candleRange) * 100
+
+        // Loosely hammer-like: very long lower wick and small body (but not strict)
+        if lowerWickPct > 60 and bodyPct < 35
+            bodyPercentSum += bodyPct
+            lowerWickPercentSum += lowerWickPct
+            hammerCount += 1
+
+// Calculate average body and wick %
+avgBodyPct = hammerCount > 0 ? bodyPercentSum / hammerCount : na
+avgLowerWickPct = hammerCount > 0 ? lowerWickPercentSum / hammerCount : na
+
+// Use dynamic thresholds based on learned history
+thresholdBody = avgBodyPct * 1.05
+thresholdWick = avgLowerWickPct * 0.95
+
+// Check candle 1 bar ago
+high1 = high[1]
+low1 = low[1]
+open1 = open[1]
+close1 = close[1]
+candleRange1 = high1 - low1
+body1 = math.abs(close1 - open1)
+lowerWick1 = math.min(close1, open1) - low1
+bodyPct1 = (body1 / candleRange1) * 100
+lowerWickPct1 = (lowerWick1 / candleRange1) * 100
+
+// Downtrend check (3 red candles before hammer)
+wasDowntrend = close[2] < open[2] and close[3] < open[3] and close[4] < open[4]
+isBullishConfirmation = close > open
+
+// Final hammer check based on learned thresholds
+isHammer = bodyPct1 < thresholdBody and lowerWickPct1 >= thresholdWick
+hammerReversal = isHammer and wasDowntrend and isBullishConfirmation
+
+// Plot visually
+plotshape(hammerReversal, title="Adaptive Hammer", location=location.belowbar, offset=-1, color=color.green, style=shape.labelup, text="BUY")
+
+if hammerReversal
+    label.new(bar_index - 1, low[1], text="BUY", style=label.style_label_up, color=color.green, textcolor=color.white, size=size.large)
